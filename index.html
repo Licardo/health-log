@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Health Log V2.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 动画与过渡 */
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s ease, opacity 0.3s ease; }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(20px); opacity: 0; }
+
+        /* 时间轴样式 */
+        .timeline-line-dashed::before {
+            content: ''; position: absolute; top: 24px; bottom: -24px; left: 19px; width: 2px; 
+            background-image: linear-gradient(to bottom, #cbd5e1 50%, transparent 50%);
+            background-size: 2px 10px; z-index: 0;
+        }
+        .timeline-line-solid::before {
+            content: ''; position: absolute; top: 24px; bottom: -24px; left: 19px; width: 2px; 
+            background: #e2e8f0; z-index: 0;
+        }
+        /* 最后一项去掉线 */
+        .timeline-item:last-child .timeline-line-solid::before { display: none; }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden text-slate-600 bg-slate-50">
+
+<div id="app" class="flex w-full h-full max-w-7xl mx-auto bg-white sm:shadow-xl sm:my-4 sm:rounded-3xl overflow-hidden relative">
+
+    <!-- ================= Sidebar (Desktop Only) ================= -->
+    <aside class="hidden md:flex flex-col w-64 bg-slate-900 text-white p-6 shrink-0">
+        <div class="flex items-center mb-10">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-400 to-cyan-500 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
+                <i class="fas fa-heartbeat text-white text-sm"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-wide">Health Log</h1>
+        </div>
+
+        <nav class="space-y-2 flex-1">
+            <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+                class="w-full flex items-center px-4 py-3 rounded-xl transition-all duration-200 group"
+                :class="currentTab === tab.id ? 'bg-white/10 text-white font-bold' : 'text-slate-400 hover:bg-white/5 hover:text-white'">
+                <div class="w-8 flex justify-center"><i :class="tab.icon"></i></div>
+                <span>{{ tab.label }}</span>
+                <i v-if="currentTab === tab.id" class="fas fa-chevron-right ml-auto text-xs opacity-50"></i>
+            </button>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-white/10">
+            <div class="bg-slate-800 rounded-xl p-4">
+                <p class="text-xs text-slate-400 mb-1">今日完成度</p>
+                <div class="flex items-end justify-between">
+                    <span class="text-2xl font-bold text-emerald-400">{{ completionRate }}%</span>
+                    <i class="fas fa-chart-pie text-slate-600"></i>
+                </div>
+                <div class="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div class="bg-emerald-400 h-full rounded-full transition-all duration-500" :style="{width: completionRate + '%'}"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ================= Main Content Area ================= -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white p-4 border-b border-slate-100 flex justify-between items-center z-20 shrink-0">
+            <div class="flex items-center">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center mr-2 text-white"><i class="fas fa-heartbeat"></i></div>
+                <h1 class="font-bold text-slate-800">Health Log</h1>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                <span class="text-xs font-bold">{{ completionRate }}%</span>
+            </div>
+        </header>
+
+        <!-- Desktop Header (Title Bar) -->
+        <header class="hidden md:flex justify-between items-center px-8 py-6 bg-white border-b border-slate-50 shrink-0">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800">{{ getTabName(currentTab) }}</h2>
+                <p class="text-slate-400 text-sm mt-1">{{ currentDate }}</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- Desktop Add Actions -->
+                <button v-if="currentTab === 'daily'" @click="showSuppManage = true" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition text-sm font-bold">
+                    <i class="fas fa-cog mr-2"></i> 管理补剂
+                </button>
+                <button v-if="currentTab === 'plans'" @click="openPlanEdit(null)" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-bold shadow-lg shadow-blue-200">
+                    <i class="fas fa-plus mr-2"></i> 新增检查
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 bg-slate-50/50">
+            
+            <!-- ================= Tab 1: Daily Supplements ================= -->
+            <div v-if="currentTab === 'daily'" class="max-w-3xl mx-auto space-y-6">
+                <!-- Mobile Action -->
+                <div class="md:hidden flex justify-end">
+                    <button @click="showSuppManage = true" class="text-sm bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+                        <i class="fas fa-cog text-slate-400 mr-1"></i> 设置
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Progress Card -->
+                    <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-200 relative overflow-hidden">
+                        <div class="relative z-10">
+                            <p class="text-emerald-100 mb-2 font-medium">今日目标</p>
+                            <div class="flex items-baseline">
+                                <span class="text-5xl font-bold">{{ doneCount }}</span>
+                                <span class="text-xl opacity-70">/ {{ supplementsConfig.length }}</span>
+                            </div>
+                            <p class="mt-4 text-sm opacity-90 bg-white/20 inline-block px-3 py-1 rounded-full backdrop-blur-md">
+                                {{ completionRate === 100 ? '🎉 全部完成，真棒！' : '💪 继续加油' }}
+                            </p>
+                        </div>
+                        <i class="fas fa-pills absolute -right-4 -bottom-4 text-9xl text-white/10"></i>
+                    </div>
+
+                    <!-- History Entry -->
+                    <button @click="showSuppHistory = true" class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition flex flex-col justify-between group">
+                        <div class="flex justify-between items-start">
+                            <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center"><i class="fas fa-calendar-alt"></i></div>
+                            <i class="fas fa-arrow-right text-slate-300 group-hover:text-indigo-500 transition"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800">打卡日历</h3>
+                            <p class="text-sm text-slate-400">查看历史记录</p>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- List -->
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-5 border-b border-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-slate-700">今日清单</h3>
+                        <button @click="resetDaily" class="text-xs text-slate-400 hover:text-emerald-500"><i class="fas fa-redo mr-1"></i>重置</button>
+                    </div>
+                    <div v-if="activeSupplements.length === 0" class="p-8 text-center text-slate-400">
+                        暂无补剂配置
+                    </div>
+                    <div v-for="item in activeSupplements" :key="item.id" 
+                         @click="toggleSupplement(item.id)"
+                         class="flex items-center justify-between p-4 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 transition"
+                         :class="{'bg-emerald-50/40': item.done}">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 rounded-xl border-2 mr-4 flex items-center justify-center transition-all"
+                                 :class="item.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200 text-transparent'">
+                                <i class="fas fa-check text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700" :class="{'line-through text-slate-400': item.done}">{{ item.name }}</p>
+                                <p class="text-xs text-slate-400">{{ item.time }} · {{ item.dosage }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= Tab 2: Meds ================= -->
+            <div v-if="currentTab === 'meds'" class="max-w-3xl mx-auto space-y-6">
+                <!-- Quick Add -->
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8">
+                    <h2 class="font-bold text-slate-800 mb-6 flex items-center"><i class="fas fa-plus-circle text-orange-500 mr-2"></i> 快速记录用药</h2>
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1 relative">
+                            <i class="fas fa-capsules absolute left-4 top-3.5 text-slate-300"></i>
+                            <input v-model="newMed.name" type="text" placeholder="药品名称 (如: 布洛芬)" class="w-full bg-slate-50 pl-10 pr-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-orange-200 outline-none">
+                        </div>
+                        <div class="flex-1 relative">
+                            <i class="fas fa-notes-medical absolute left-4 top-3.5 text-slate-300"></i>
+                            <input v-model="newMed.reason" type="text" placeholder="症状 (如: 头痛)" class="w-full bg-slate-50 pl-10 pr-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-orange-200 outline-none">
+                        </div>
+                        <button @click="addMedRecord" :disabled="!newMed.name" class="md:w-32 bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-200 hover:bg-orange-600 transition disabled:opacity-50 disabled:shadow-none">
+                            提交
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Logs -->
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden min-h-[400px]">
+                    <div class="p-5 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <h3 class="font-bold text-slate-700">用药档案</h3>
+                        <div class="relative w-40 md:w-64">
+                            <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input v-model="medSearch" type="text" placeholder="搜索..." class="w-full bg-slate-50 pl-8 pr-3 py-2 rounded-lg text-xs outline-none focus:bg-white focus:ring-1 focus:ring-orange-200 transition">
+                        </div>
+                    </div>
+                    
+                    <div class="divide-y divide-slate-50">
+                        <div v-if="filteredMedHistory.length === 0" class="p-10 text-center text-slate-400">无记录</div>
+                        <div v-for="log in filteredMedHistory" :key="log.id" class="p-5 hover:bg-slate-50 transition flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mr-4 shrink-0">
+                                    <i class="fas fa-first-aid"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800">{{ log.name }}</h4>
+                                    <p class="text-sm text-slate-500 mt-0.5">{{ log.reason }}</p>
+                                </div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">{{ formatDate(log.timestamp) }}</div>
+                                <div class="text-[10px] text-slate-300 mt-1">{{ formatTime(log.timestamp) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= Tab 3: Plans (Refined Timeline) ================= -->
+            <div v-if="currentTab === 'plans'" class="max-w-3xl mx-auto">
+                
+                <!-- Mobile Add Button (Header has title, but space is limited) -->
+                <div class="md:hidden flex items-center justify-between mb-4 px-2">
+                    <h2 class="font-bold text-slate-700">健康时间轴</h2>
+                    <button @click="openPlanEdit(null)" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-blue-200">
+                        <i class="fas fa-plus mr-1"></i> 新增
+                    </button>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="mb-6 bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                    <i class="fas fa-search text-slate-400 ml-3 mr-2"></i>
+                    <input v-model="planSearch" placeholder="搜索检查项目或结果..." class="w-full bg-transparent p-2 text-sm outline-none">
+                </div>
+
+                <div class="relative pl-4">
+                    <!-- SECTION: FUTURE (Pending) -->
+                    <div v-if="pendingPlans.length > 0" class="mb-2">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pl-10">Upcoming</div>
+                        
+                        <div v-for="plan in pendingPlans" :key="plan.id" class="timeline-item relative pl-10 pb-8 timeline-line-dashed group" @click="openPlanEdit(plan)">
+                            <!-- Dot -->
+                            <div class="absolute left-[15px] top-1 w-4 h-4 bg-white border-2 border-slate-300 rounded-full z-10 group-hover:border-blue-500 transition"></div>
+                            
+                            <!-- Card -->
+                            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm group-hover:shadow-md group-hover:border-blue-300 transition cursor-pointer relative overflow-hidden">
+                                <div class="absolute top-0 left-0 w-1.5 h-full" :class="getPlanColor(plan.type).bar"></div>
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <div class="flex items-center mb-1">
+                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 uppercase" :class="getPlanColor(plan.type).tag">{{ plan.type }}</span>
+                                            <h3 class="font-bold text-slate-800">{{ plan.name }}</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500"><i class="far fa-clock mr-1"></i> 计划日期: {{ plan.dueDate }}</p>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-slate-200 group-hover:text-blue-500"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DIVIDER: NOW -->
+                    <div class="flex items-center mb-8 -ml-1">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px] border-4 border-white shadow-sm z-10 shrink-0">
+                            NOW
+                        </div>
+                        <div class="h-px bg-slate-200 flex-1 ml-4"></div>
+                    </div>
+
+                    <!-- SECTION: PAST (History) -->
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pl-10">History Archive</div>
+                        
+                        <div v-if="filteredDonePlans.length === 0" class="pl-10 text-slate-400 text-sm italic">暂无历史记录</div>
+
+                        <div v-for="plan in filteredDonePlans" :key="plan.id" class="timeline-item relative pl-10 pb-8 timeline-line-solid group" @click="openPlanEdit(plan)">
+                            <!-- Dot -->
+                            <div class="absolute left-[15px] top-1 w-4 h-4 rounded-full border-2 z-10 bg-white" :class="getPlanColor(plan.type).dot"></div>
+                            
+                            <!-- Card -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md hover:border-blue-200 transition cursor-pointer opacity-90 hover:opacity-100">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-bold text-slate-700 line-through decoration-slate-300">{{ plan.name }}</h3>
+                                    <span class="text-xs font-mono text-slate-400">{{ plan.doneDate }}</span>
+                                </div>
+                                <div class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-100">
+                                    <i class="fas fa-clipboard-check text-emerald-500 mr-1"></i>
+                                    {{ plan.resultSummary || '无详细结论' }}
+                                </div>
+                                <div v-if="plan.fileName" class="mt-2 text-[10px] text-blue-500 flex items-center">
+                                    <i class="fas fa-paperclip mr-1"></i> {{ plan.fileName }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ================= Mobile Bottom Nav ================= -->
+    <nav class="md:hidden bg-white border-t border-slate-100 shrink-0 pb-safe z-30">
+        <div class="flex justify-around items-center h-16">
+            <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+                class="flex flex-col items-center justify-center w-1/3 h-full transition-colors relative"
+                :class="currentTab === tab.id ? 'text-slate-800' : 'text-slate-300'">
+                <div v-if="currentTab === tab.id" class="absolute top-0 w-10 h-1 bg-slate-800 rounded-b-full"></div>
+                <i :class="[tab.icon, 'text-xl mb-1']"></i>
+                <span class="text-[10px] font-bold">{{ tab.label }}</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ================= MODALS (Unified) ================= -->
+    
+    <!-- Plan Edit Modal (Reused) -->
+    <transition name="fade">
+        <div v-if="editingPlan" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                <div class="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50">
+                    <h3 class="font-bold text-slate-800 text-lg">{{ editingPlan.id ? '编辑计划' : '新增检查' }}</h3>
+                    <button @click="closePlanEdit" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                
+                <div class="p-6 overflow-y-auto space-y-5">
+                    <!-- Form Fields -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">检查名称</label>
+                        <input v-model="editingPlanTemp.name" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 outline-none focus:border-blue-500 transition" placeholder="例如: 全身核磁共振">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">类型</label>
+                            <select v-model="editingPlanTemp.type" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none">
+                                <option value="annual">年度体检</option>
+                                <option value="quarterly">季度复查</option>
+                                <option value="dental">牙科</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">计划日期</label>
+                            <input v-model="editingPlanTemp.dueDate" type="date" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Result Entry (If editing existing) -->
+                    <div v-if="editingPlan.id" class="pt-4 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-xs font-bold text-blue-600 uppercase tracking-wide">检查结果</label>
+                            <span v-if="editingPlanTemp.status === 'done'" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">已归档</span>
+                        </div>
+                        <div class="bg-blue-50 rounded-xl p-4 space-y-3">
+                            <textarea v-model="editingPlanTemp.resultSummary" class="w-full p-3 rounded-lg border border-blue-100 text-sm focus:ring-2 focus:ring-blue-200 outline-none" rows="3" placeholder="填写医生建议或关键指标..."></textarea>
+                            <div class="flex items-center space-x-2 text-blue-500 text-xs font-bold cursor-pointer hover:text-blue-700">
+                                <i class="fas fa-paperclip"></i>
+                                <span>上传报告文件 (模拟)</span>
+                                <input type="file" class="hidden" @change="handleFileUpload">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 bg-slate-50 flex gap-3">
+                    <button v-if="editingPlan.id" @click="deletePlan" class="px-4 rounded-xl text-red-400 hover:bg-red-100 hover:text-red-500 transition"><i class="fas fa-trash-alt"></i></button>
+                    <div class="flex-1 flex gap-3">
+                        <button @click="savePlan(false)" class="flex-1 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-100">保存</button>
+                        <button v-if="editingPlanTemp.status !== 'done'" @click="savePlan(true)" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700">完成并归档</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Supp Config Modal -->
+    <transition name="fade">
+        <div v-if="showSuppManage" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 max-h-[80vh] flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-slate-800">补剂清单设置</h3>
+                    <button @click="saveSuppConfig" class="text-slate-400"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-3">
+                    <div v-for="(item, idx) in supplementsConfig" :key="idx" class="flex items-center gap-2 bg-slate-50 p-3 rounded-xl">
+                        <input v-model="item.name" class="flex-1 bg-transparent font-bold text-slate-700 outline-none border-b border-transparent focus:border-emerald-300" placeholder="名称">
+                        <input v-model="item.dosage" class="w-16 bg-white rounded px-2 py-1 text-xs text-slate-500 outline-none" placeholder="剂量">
+                        <select v-model="item.time" class="bg-white rounded px-2 py-1 text-xs text-slate-500 outline-none"><option>早</option><option>中</option><option>晚</option></select>
+                        <button @click="deleteSupplement(idx)" class="text-slate-300 hover:text-red-400"><i class="fas fa-times-circle"></i></button>
+                    </div>
+                    <button @click="addSupplementConfig" class="w-full py-3 border border-dashed border-slate-300 rounded-xl text-slate-400 font-bold hover:border-emerald-500 hover:text-emerald-500 transition">+ 添加</button>
+                </div>
+                <button @click="saveSuppConfig" class="mt-6 w-full bg-slate-800 text-white py-3 rounded-xl font-bold">保存配置</button>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Calendar Modal (Supp History) -->
+    <transition name="fade">
+        <div v-if="showSuppHistory" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white p-6 rounded-3xl shadow-2xl relative">
+                <button @click="showSuppHistory=false" class="absolute top-4 right-4 text-slate-300"><i class="fas fa-times"></i></button>
+                <h3 class="font-bold text-slate-800 mb-4 text-center">本月打卡记录</h3>
+                <div class="grid grid-cols-7 gap-2">
+                    <div v-for="n in 30" :key="n" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                         :class="n > 25 ? 'bg-slate-50 text-slate-300' : (Math.random()>0.3 ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-500')">
+                        {{n}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                currentTab: 'daily',
+                currentDate: new Date().toLocaleDateString('zh-CN', {month:'short', day:'numeric', weekday:'long'}),
+                tabs: [
+                    { id: 'daily', label: '日常补剂', icon: 'fas fa-sun' },
+                    { id: 'meds', label: '用药记录', icon: 'fas fa-capsules' },
+                    { id: 'plans', label: '检查计划', icon: 'fas fa-clipboard-list' }
+                ],
+                
+                // Supps
+                showSuppManage: false,
+                showSuppHistory: false,
+                supplementsConfig: [],
+                dailyRecords: {},
+
+                // Meds
+                newMed: { name: '', reason: '' },
+                medHistory: [],
+                medSearch: '',
+
+                // Plans
+                healthPlans: [],
+                planSearch: '',
+                editingPlan: null,
+                editingPlanTemp: {},
+            }
+        },
+        computed: {
+            activeSupplements() { return this.supplementsConfig.map(s => ({...s, done: !!this.dailyRecords[s.id]})); },
+            doneCount() { return Object.values(this.dailyRecords).filter(Boolean).length; },
+            completionRate() { 
+                if(!this.supplementsConfig.length) return 0;
+                return Math.round((this.doneCount / this.supplementsConfig.length) * 100); 
+            },
+            filteredMedHistory() {
+                if (!this.medSearch) return this.medHistory;
+                const q = this.medSearch.toLowerCase();
+                return this.medHistory.filter(l => l.name.toLowerCase().includes(q) || l.reason.toLowerCase().includes(q));
+            },
+            // Plans Logic
+            pendingPlans() { return this.healthPlans.filter(p => p.status !== 'done').sort((a,b) => a.dueDate.localeCompare(b.dueDate)); },
+            filteredDonePlans() { 
+                let list = this.healthPlans.filter(p => p.status === 'done');
+                if (this.planSearch) {
+                    const q = this.planSearch.toLowerCase();
+                    list = list.filter(p => p.name.toLowerCase().includes(q) || (p.resultSummary && p.resultSummary.toLowerCase().includes(q)));
+                }
+                return list.sort((a,b) => b.doneDate.localeCompare(a.doneDate)); 
+            }
+        },
+        mounted() { this.initData(); },
+        methods: {
+            initData() {
+                // Mock Data Initialization
+                this.supplementsConfig = JSON.parse(localStorage.getItem('v2.2_supps')) || [{ id: 1, name: '维生素C', dosage: '500mg', time: '早' }];
+                const today = new Date().toDateString();
+                if(localStorage.getItem('v2.2_date') !== today) { this.dailyRecords = {}; localStorage.setItem('v2.2_date', today); } 
+                else { this.dailyRecords = JSON.parse(localStorage.getItem('v2.2_daily')) || {}; }
+                this.medHistory = JSON.parse(localStorage.getItem('v2.2_meds')) || [];
+                this.healthPlans = JSON.parse(localStorage.getItem('v2.2_plans')) || [
+                    { id: 1, name: '入职体检', type: 'annual', dueDate: '2025-01-10', status: 'pending' },
+                    { id: 2, name: '牙齿洗牙', type: 'dental', dueDate: '2024-06-15', doneDate: '2024-06-15', status: 'done', resultSummary: '牙石较多，建议半年一次' }
+                ];
+            },
+            saveAll() {
+                localStorage.setItem('v2.2_supps', JSON.stringify(this.supplementsConfig));
+                localStorage.setItem('v2.2_daily', JSON.stringify(this.dailyRecords));
+                localStorage.setItem('v2.2_meds', JSON.stringify(this.medHistory));
+                localStorage.setItem('v2.2_plans', JSON.stringify(this.healthPlans));
+            },
+            getTabName(id) { return this.tabs.find(t=>t.id===id)?.label; },
+            
+            // Logic Methods
+            toggleSupplement(id) { this.dailyRecords[id] = !this.dailyRecords[id]; this.saveAll(); },
+            resetDaily() { this.dailyRecords = {}; this.saveAll(); },
+            addSupplementConfig() { this.supplementsConfig.push({ id: Date.now(), name: '', dosage: '', time: '早' }); },
+            deleteSupplement(idx) { this.supplementsConfig.splice(idx,1); },
+            saveSuppConfig() { this.supplementsConfig = this.supplementsConfig.filter(s=>s.name.trim()); this.showSuppManage=false; this.saveAll(); },
+            
+            addMedRecord() {
+                this.medHistory.unshift({ id: Date.now(), name: this.newMed.name, reason: this.newMed.reason, timestamp: Date.now() });
+                this.newMed = {name:'', reason:''}; this.saveAll();
+            },
+            formatDate(ts) { return new Date(ts).toLocaleDateString('zh-CN', {month:'short',day:'numeric'}); },
+            formatTime(ts) { return new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}); },
+
+            // Plan Methods
+            getPlanColor(type) {
+                const map = {
+                    annual: { bar: 'bg-blue-500', tag: 'bg-blue-100 text-blue-600', dot: 'border-blue-500' },
+                    quarterly: { bar: 'bg-teal-400', tag: 'bg-teal-100 text-teal-600', dot: 'border-teal-400' },
+                    dental: { bar: 'bg-purple-400', tag: 'bg-purple-100 text-purple-600', dot: 'border-purple-400' }
+                };
+                return map[type] || { bar: 'bg-slate-400', tag: 'bg-slate-100 text-slate-500', dot: 'border-slate-400' };
+            },
+            openPlanEdit(plan) {
+                this.editingPlan = plan || {};
+                this.editingPlanTemp = plan ? JSON.parse(JSON.stringify(plan)) : { id: null, name: '', type: 'annual', dueDate: new Date().toISOString().split('T')[0], status: 'pending' };
+            },
+            closePlanEdit() { this.editingPlan = null; },
+            deletePlan() {
+                if(confirm('删除此计划?')) {
+                    this.healthPlans = this.healthPlans.filter(p => p.id !== this.editingPlan.id);
+                    this.saveAll();
+                    this.closePlanEdit();
+                }
+            },
+            savePlan(markDone) {
+                if(!this.editingPlanTemp.name) return;
+                
+                if(markDone) {
+                    this.editingPlanTemp.status = 'done';
+                    this.editingPlanTemp.doneDate = new Date().toISOString().split('T')[0];
+                }
+
+                if(this.editingPlanTemp.id) {
+                    const idx = this.healthPlans.findIndex(p => p.id === this.editingPlanTemp.id);
+                    if(idx!==-1) this.healthPlans[idx] = this.editingPlanTemp;
+                } else {
+                    this.editingPlanTemp.id = Date.now();
+                    this.healthPlans.push(this.editingPlanTemp);
+                }
+
+                // Recurrence logic simulation
+                if(markDone) {
+                    const next = new Date(this.editingPlanTemp.dueDate);
+                    if(this.editingPlanTemp.type === 'annual') next.setFullYear(next.getFullYear()+1);
+                    else next.setMonth(next.getMonth()+3);
+                    
+                    if(confirm(`已归档! 是否自动创建下一次计划 (${next.toLocaleDateString()})?`)) {
+                        this.healthPlans.push({
+                            id: Date.now()+1,
+                            name: this.editingPlanTemp.name,
+                            type: this.editingPlanTemp.type,
+                            dueDate: next.toISOString().split('T')[0],
+                            status: 'pending'
+                        });
+                    }
+                }
+                this.saveAll();
+                this.closePlanEdit();
+            }
+            // ☁️ 从云端同步配置
+            async function fetchSupplements() {
+                try {
+                    // 替换为你的 Vercel 域名，本地测试用 /api/supplements
+                    const res = await fetch('/api/supplements');
+                    const data = await res.json();
+
+                    // 更新本地数据
+                    this.supplementsConfig = data;
+
+                    // 缓存一份到 localStorage 以防断网
+                    localStorage.setItem('v2.2_supps', JSON.stringify(data));
+                } catch (e) {
+                    console.error("同步失败，使用本地缓存", e);
+                }
+            },
+
+            // ☁️ 上传新配置
+            async function syncAddSupp(item) {
+                await fetch('/api/supplements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create',
+                        name: item.name,
+                        dosage: item.dosage,
+                        time: item.time
+                    })
+                });
+                this.fetchSupplements(); // 重新拉取以获取正确的 ID
+            },
+
+            // ☁️ 删除配置
+            async function syncDeleteSupp(id) {
+                await fetch('/api/supplements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        id: id
+                    })
+                });
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
