@@ -1,81 +1,170 @@
-这是一个非常经典的问题。目前 Vercel 分配的默认域名 `*.vercel.app` 在国内确实是被 DNS 污染或阻断的状态，导致必须翻墙才能访问。
+这是一个为你量身定制的 `README.md` 文档。它是按照**“写给未来的 AI 或开发者看”**的标准撰写的。
 
-要实现**免翻墙、像原生 App 一样丝滑访问**，推荐以下 3 种方案，按推荐程度排序：
-
----
-
-### 方案一：绑定自定义域名 (最推荐，成本极低)
-
-这是最稳妥、最长效的方案。虽然 `vercel.app` 被墙了，但 **Vercel 的服务器 IP (Anycast)** 并没有被完全封锁。只要你换一个没被墙的“门牌号”（域名），就能直接直连访问。
-
-**操作步骤：**
-
-1.  **购买域名**：
-    *   去阿里云、腾讯云、NameSilo 或 Porkbun 买一个便宜的域名。
-    *   比如 `.top`、`.xyz` 或 `.site` 后缀，首年往往只需要 **10元人民币** 左右。
-    *   *建议：* 如果不想折腾备案（ICP），建议在国外平台（如 NameSilo/Namesilo）购买，或者虽在国内买但只解析到海外服务器（Vercel），目前个人使用通常不需要备案。
-2.  **在 Vercel 绑定**：
-    *   进入 Vercel Dashboard -> Settings -> **Domains**。
-    *   输入你买的域名（例如 `my-health.xyz`），点击 Add。
-3.  **配置 DNS 解析**：
-    *   回到你买域名的控制台（域名管理后台）。
-    *   添加一条 **CNAME 记录**：
-        *   主机记录 (Host): `@` (或者 `www`)
-        *   记录值 (Value): **`cname.vercel-dns.com`**
-    *   或者添加 **A 记录** (Vercel 推荐国内用户使用 A 记录，更稳)：
-        *   记录值: **`76.76.21.21`**
-
-**结果：** 等待几分钟解析生效后，你就可以用 `http://my-health.xyz` 直接在手机浏览器访问，无需代理，速度通常不错。
+你可以将以下内容保存为项目根目录下的 `README.md` 文件。下次如果你需要大模型帮你加功能，只需把这个文档贴给它，它就能瞬间理解整个项目架构。
 
 ---
 
-### 方案二：套一层 Cloudflare (免费 CDN 加速)
+# 🏥 Personal Health Hub (个人健康中台)
 
-如果你已经有了域名，但发现直连 Vercel 依然慢或者不稳定，可以把域名接入 **Cloudflare**。
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 
-**原理：**
-用户 -> Cloudflare (全球节点，含部分国内优化) -> Vercel。
-Cloudflare 在国内的可访问性比 Vercel 原生 IP 要好很多。
+这是一个基于 **Serverless 架构** 的轻量级个人健康管理 H5 应用。它将前端部署在 Vercel，通过 Vercel Functions 作为后端代理，使用 **Notion Database** 作为无头 CMS (Headless CMS) 存储所有健康数据。
 
-**操作步骤：**
-1.  注册 Cloudflare 账号，点击 **Add a Site**，输入你的域名。
-2.  按照 Cloudflare 的指引，去你的域名注册商那里，把 **DNS 服务器 (Nameservers)** 修改为 Cloudflare 提供的地址。
-3.  在 Cloudflare 的 DNS 设置里，指向 Vercel：
-    *   Type: `CNAME`
-    *   Name: `@`
-    *   Content: `cname.vercel-dns.com`
-    *   **Proxy status: 打开 (亮橙色云朵图标)** <- 关键点，这代表流量走 Cloudflare 代理。
-4.  在 Vercel 后台的 Domains 里，把域名加上。
+## 🛠 技术栈 (Tech Stack)
+
+*   **Frontend (单页应用):**
+    *   **HTML5 / ES6+**: 原生开发，无构建步骤 (No Build Step)。
+    *   **Vue.js 3**: 使用 Global Build (CDN 引入)，采用 Composition API 写法。
+    *   **Tailwind CSS**: 通过 CDN 引入，负责所有 UI 样式 (Utility-first)。
+    *   **FontAwesome**: 图标库。
+*   **Backend (Serverless):**
+    *   **Vercel Functions**: Node.js 运行环境。
+    *   **@notionhq/client**: Notion 官方 SDK。
+*   **Database:**
+    *   **Notion**: 两个核心数据库 (Logs & Configs)。
+
+## ✨ 核心功能 (Features)
+
+1.  **💊 日常补剂 (Supplements)**
+    *   **打卡系统**: 每日追踪补剂服用情况，支持勾选/取消（云端同步）。
+    *   **配置管理**: 支持增删改补剂清单（名称、剂量、服用时间），数据存储在 Notion 独立库。
+    *   **历史热力图**: 可视化展示过去 30 天的打卡频率（基于真实历史数据）。
+2.  **💊 用药记录 (Medications)**
+    *   **快速录入**: 记录突发性用药（药品名 + 症状/原因）。
+    *   **历史档案**: 支持修改、删除（归档）和搜索历史记录。
+3.  **🩺 定期检查 (Health Plans)**
+    *   **全景时间轴**: 统一展示未来计划 (Upcoming) 和 历史归档 (History)。
+    *   **计划管理**: 新增、修改检查计划，支持不同类型（年度、季度、牙科等）颜色区分。
+    *   **结果归档**: 完成检查后录入结果摘要，自动归档并变更为实线连接。
+4.  **📱 UI/UX**
+    *   **响应式设计**: 完美适配移动端（全屏 App 体验 + 底部导航）和 桌面端（侧边栏 + 宽屏布局）。
+    *   **乐观更新 (Optimistic UI)**: 操作即时反馈，后台异步同步，体验丝滑。
 
 ---
 
-### 方案三：PWA 桌面图标 (体验优化)
+## ⚙️ 数据库配置 (Notion Schema)
 
-解决了网络问题后，为了“更方便”，我们可以把它变成手机桌面的一个 App 图标（去除浏览器地址栏，全屏运行）。
+项目依赖两个 Notion 数据库。**必须严格按照以下字段名称和类型配置**，否则 API 会报错。
 
-**iPhone (iOS):**
-1.  用 Safari 打开你的新域名。
-2.  点击底部中间的 **分享按钮**。
-3.  下滑找到 **“添加到主屏幕” (Add to Home Screen)**。
-4.  点右上角“添加”。
-5.  **完成**：桌面上会出现一个图标，点开就是全屏 App 体验。
+### 1. 补剂配置库 (Supplement Configs)
+*用于存储“我要吃哪些药”的静态配置。*
 
-**Android (Chrome/Edge):**
-1.  用浏览器打开域名。
-2.  点击右上角菜单。
-3.  点击 **“安装应用”** 或 **“添加到主屏幕”**。
+| 字段名 (Property Name) | 类型 (Type) | 说明 |
+| :--- | :--- | :--- |
+| **Name** | Title | 补剂名称 (Primary Key) |
+| **Dosage** | Rich Text | 剂量 (如: 500mg) |
+| **Time** | Select | 选项: `早晨`, `午餐`, `晚餐`, `睡前` |
+| **Active** | Checkbox | 标记是否启用 (软删除用) |
+
+### 2. 健康日志库 (Health Logs)
+*用于存储所有的动态记录：补剂打卡、生病吃药、体检计划。*
+
+| 字段名 (Property Name) | 类型 (Type) | 关键选项/说明 |
+| :--- | :--- | :--- |
+| **Name** | Title | 记录名称 (药名或检查项) |
+| **Date** | Date | 记录发生的日期 (ISO YYYY-MM-DD) |
+| **Category** | Select | **核心字段**，选项必须包含:<br>1. `✅ 补剂打卡`<br>2. `💊 临时用药`<br>3. `🩺 定期检查` |
+| **Status** | Select | 选项: `Pending` (待办), `Done` (已完成) |
+| **Type** | Select | 选项: `Annual`, `Quarterly`, `Dental`, `Other` |
+| **Result** | Rich Text | 检查结果摘要或用药症状备注 |
 
 ---
 
-### 💡 总结建议
+## 🚀 部署教程 (Deployment)
 
-1.  **如果你不想花一分钱**：
-    *   很遗憾，免费的 `vercel.app` 在国内几乎无法直连。
-    *   你可以尝试找一些“反向代理服务”，但数据安全无法保证，不推荐用于健康隐私数据。
+### 1. Notion 准备工作
+1.  去 [Notion Integrations](https://www.notion.so/my-integrations) 创建一个新的 Integration，获取 `Internal Integration Token` (以 `ntn_` 开头)。
+2.  在 Notion 中打开上述两个数据库，分别点击右上角 `...` -> `Connect to` -> 选择你的机器人。**这一步至关重要，否则 API 无法读写。**
+3.  获取两个数据库的 ID (URL 中 `notion.so/` 和 `?v=` 之间的 32 位字符)。
 
-2.  **如果你愿意花 10-20 元/年 (强烈建议)**：
-    *   去买一个冷门后缀的域名（如 `my-body-log.top`）。
-    *   直接在 Vercel 绑定该域名。
-    *   然后在手机上“添加到主屏幕”。
+### 2. 本地开发 (Local Development)
+```bash
+# 1. 克隆项目或创建目录
+mkdir my-health-log && cd my-health-log
 
-这样你就拥有了一个**免翻墙、独立域名、类似原生 App** 的个人健康中台了！
+# 2. 初始化并安装依赖
+npm init -y
+npm install @notionhq/client
+
+# 3. 创建环境变量文件 .env
+echo "NOTION_KEY=ntn_你的密钥" >> .env
+echo "NOTION_CONFIG_DB_ID=你的配置库ID" >> .env
+echo "NOTION_LOGS_DB_ID=你的日志库ID" >> .env
+
+# 4. 启动本地服务 (需要安装 Vercel CLI: npm i -g vercel)
+vercel dev
+```
+
+### 3. 上线 Vercel (Production)
+1.  将代码推送到 GitHub。
+2.  在 Vercel Dashboard 导入项目。
+3.  在 **Settings -> Environment Variables** 中填入以下变量：
+    *   `NOTION_KEY`
+    *   `NOTION_CONFIG_DB_ID`
+    *   `NOTION_LOGS_DB_ID`
+4.  部署后，建议绑定独立域名以获得国内最佳访问体验。
+
+---
+
+## 📡 API 文档 (Backend Reference)
+
+所有 API 均位于 `/api` 目录下，由 Vercel Functions 托管。
+
+### `GET /api/supplements`
+*   **功能**: 获取当前启用的补剂配置列表。
+*   **返回**: JSON 数组。
+
+### `POST /api/supplements`
+*   **功能**: 管理配置。
+*   **Body**:
+    *   `action`: `'create'` 或 `'delete'`
+    *   `id`: (删除时需要) Notion Page ID
+    *   `name`, `dosage`, `time`: (创建时需要)
+
+### `GET /api/logs`
+*   **参数**:
+    *   `category`: 筛选类别 (如 `💊 临时用药`)
+    *   `date`: 筛选具体日期 (YYYY-MM-DD)
+    *   `limit`: 限制返回条数 (默认 50，热力图用 100)
+*   **返回**: 格式化后的日志列表。
+
+### `POST /api/logs`
+*   **功能**: 创建新日志 (打卡、用药、检查)。
+*   **Body**: `{ name, date, category, status, type, result }`
+
+### `PUT /api/logs`
+*   **功能**: 更新现有日志。
+*   **Body**: `{ id, ...需要更新的字段 }`
+
+### `DELETE /api/logs`
+*   **功能**: 归档日志 (软删除)。
+*   **Body**: `{ id }`
+
+---
+
+## 🔮 维护与扩展指南 (For AI Assistants)
+
+如果你是负责维护此项目的 AI 助手，请遵循以下逻辑：
+
+1.  **修改 UI**: 所有前端逻辑都在 `index.html` 的 `<script>` 标签内。使用了 Vue 3 Composition API 风格。
+    *   *注意*: 修改 CSS 时优先使用 Tailwind 类名，不要写内联 style。
+2.  **修改字段**: 如果需要增加新的记录字段（如“花费金额”）：
+    *   第一步：在 Notion 数据库添加 `Cost` (Number) 字段。
+    *   第二步：修改 `api/logs.js`，在 `properties` 对象中映射该字段。
+    *   第三步：修改 `index.html` 中的表单和列表渲染。
+3.  **调试**:
+    *   后端日志通过 `console.log` 输出，可以在 Vercel Dashboard -> Logs 中查看。
+    *   前端报错请通过浏览器 F12 Network 面板查看 API 响应。
+
+---
+
+## 📄 目录结构
+```text
+/
+├── api/
+│   ├── logs.js           # 核心业务逻辑 (CRUD)
+│   └── supplements.js    # 配置管理逻辑
+├── index.html            # 前端入口 (Vue + Tailwind)
+├── package.json          # 依赖定义
+└── vercel.json           # (可选) Vercel 配置文件
+```
