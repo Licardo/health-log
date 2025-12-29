@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Health Log V2.2 (Cloud)</title>
+    <title>Health Log V2.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -148,7 +148,7 @@
                         <button @click="resetDaily" class="text-xs text-slate-400 hover:text-emerald-500"><i class="fas fa-redo mr-1"></i>重置</button>
                     </div>
                     <div v-if="activeSupplements.length === 0" class="p-8 text-center text-slate-400">
-                        正在从云端加载配置... <br/><span class="text-xs text-slate-300">(或点击右上角添加)</span>
+                        暂无补剂配置
                     </div>
                     <div v-for="item in activeSupplements" :key="item.id" 
                          @click="toggleSupplement(item.id)"
@@ -199,7 +199,7 @@
                     </div>
                     
                     <div class="divide-y divide-slate-50">
-                        <div v-if="filteredMedHistory.length === 0" class="p-10 text-center text-slate-400">正在加载历史记录...</div>
+                        <div v-if="filteredMedHistory.length === 0" class="p-10 text-center text-slate-400">无记录</div>
                         <div v-for="log in filteredMedHistory" :key="log.id" class="p-5 hover:bg-slate-50 transition flex justify-between items-center">
                             <div class="flex items-center">
                                 <div class="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mr-4 shrink-0">
@@ -211,8 +211,8 @@
                                 </div>
                             </div>
                             <div class="text-right shrink-0">
-                                <div class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">{{ formatDate(log.date) }}</div>
-                                <div class="text-[10px] text-slate-300 mt-1">{{ formatTime(log.date) }}</div>
+                                <div class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">{{ formatDate(log.timestamp) }}</div>
+                                <div class="text-[10px] text-slate-300 mt-1">{{ formatTime(log.timestamp) }}</div>
                             </div>
                         </div>
                     </div>
@@ -254,7 +254,7 @@
                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 uppercase" :class="getPlanColor(plan.type).tag">{{ plan.type }}</span>
                                             <h3 class="font-bold text-slate-800">{{ plan.name }}</h3>
                                         </div>
-                                        <p class="text-xs text-slate-500"><i class="far fa-clock mr-1"></i> 计划日期: {{ plan.date }}</p>
+                                        <p class="text-xs text-slate-500"><i class="far fa-clock mr-1"></i> 计划日期: {{ plan.dueDate }}</p>
                                     </div>
                                     <i class="fas fa-chevron-right text-slate-200 group-hover:text-blue-500"></i>
                                 </div>
@@ -284,11 +284,11 @@
                             <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md hover:border-blue-200 transition cursor-pointer opacity-90 hover:opacity-100">
                                 <div class="flex justify-between items-start mb-2">
                                     <h3 class="font-bold text-slate-700 line-through decoration-slate-300">{{ plan.name }}</h3>
-                                    <span class="text-xs font-mono text-slate-400">{{ plan.date }}</span>
+                                    <span class="text-xs font-mono text-slate-400">{{ plan.doneDate }}</span>
                                 </div>
                                 <div class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-100">
                                     <i class="fas fa-clipboard-check text-emerald-500 mr-1"></i>
-                                    {{ plan.result || '无详细结论' }}
+                                    {{ plan.resultSummary || '无详细结论' }}
                                 </div>
                                 <div v-if="plan.fileName" class="mt-2 text-[10px] text-blue-500 flex items-center">
                                     <i class="fas fa-paperclip mr-1"></i> {{ plan.fileName }}
@@ -336,15 +336,15 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-400 uppercase mb-2">类型</label>
                             <select v-model="editingPlanTemp.type" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none">
-                                <option value="Annual">年度体检</option>
-                                <option value="Quarterly">季度复查</option>
-                                <option value="Dental">牙科</option>
-                                <option value="Other">其他</option>
+                                <option value="annual">年度体检</option>
+                                <option value="quarterly">季度复查</option>
+                                <option value="dental">牙科</option>
+                                <option value="other">其他</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-400 uppercase mb-2">计划日期</label>
-                            <input v-model="editingPlanTemp.date" type="date" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none">
+                            <input v-model="editingPlanTemp.dueDate" type="date" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none">
                         </div>
                     </div>
 
@@ -352,10 +352,10 @@
                     <div v-if="editingPlan.id" class="pt-4 border-t border-slate-100">
                         <div class="flex items-center justify-between mb-3">
                             <label class="text-xs font-bold text-blue-600 uppercase tracking-wide">检查结果</label>
-                            <span v-if="editingPlanTemp.status === 'Done'" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">已归档</span>
+                            <span v-if="editingPlanTemp.status === 'done'" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">已归档</span>
                         </div>
                         <div class="bg-blue-50 rounded-xl p-4 space-y-3">
-                            <textarea v-model="editingPlanTemp.result" class="w-full p-3 rounded-lg border border-blue-100 text-sm focus:ring-2 focus:ring-blue-200 outline-none" rows="3" placeholder="填写医生建议或关键指标..."></textarea>
+                            <textarea v-model="editingPlanTemp.resultSummary" class="w-full p-3 rounded-lg border border-blue-100 text-sm focus:ring-2 focus:ring-blue-200 outline-none" rows="3" placeholder="填写医生建议或关键指标..."></textarea>
                             <div class="flex items-center space-x-2 text-blue-500 text-xs font-bold cursor-pointer hover:text-blue-700">
                                 <i class="fas fa-paperclip"></i>
                                 <span>上传报告文件 (模拟)</span>
@@ -369,7 +369,7 @@
                     <button v-if="editingPlan.id" @click="deletePlan" class="px-4 rounded-xl text-red-400 hover:bg-red-100 hover:text-red-500 transition"><i class="fas fa-trash-alt"></i></button>
                     <div class="flex-1 flex gap-3">
                         <button @click="savePlan(false)" class="flex-1 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-100">保存</button>
-                        <button v-if="editingPlanTemp.status !== 'Done'" @click="savePlan(true)" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700">完成并归档</button>
+                        <button v-if="editingPlanTemp.status !== 'done'" @click="savePlan(true)" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700">完成并归档</button>
                     </div>
                 </div>
             </div>
@@ -388,12 +388,12 @@
                     <div v-for="(item, idx) in supplementsConfig" :key="idx" class="flex items-center gap-2 bg-slate-50 p-3 rounded-xl">
                         <input v-model="item.name" class="flex-1 bg-transparent font-bold text-slate-700 outline-none border-b border-transparent focus:border-emerald-300" placeholder="名称">
                         <input v-model="item.dosage" class="w-16 bg-white rounded px-2 py-1 text-xs text-slate-500 outline-none" placeholder="剂量">
-                        <select v-model="item.time" class="bg-white rounded px-2 py-1 text-xs text-slate-500 outline-none"><option>早晨</option><option>午餐</option><option>睡前</option></select>
+                        <select v-model="item.time" class="bg-white rounded px-2 py-1 text-xs text-slate-500 outline-none"><option>早</option><option>中</option><option>晚</option></select>
                         <button @click="deleteSupplement(idx)" class="text-slate-300 hover:text-red-400"><i class="fas fa-times-circle"></i></button>
                     </div>
                     <button @click="addSupplementConfig" class="w-full py-3 border border-dashed border-slate-300 rounded-xl text-slate-400 font-bold hover:border-emerald-500 hover:text-emerald-500 transition">+ 添加</button>
                 </div>
-                <button @click="saveSuppConfig" class="mt-6 w-full bg-slate-800 text-white py-3 rounded-xl font-bold">保存配置 (同步云端)</button>
+                <button @click="saveSuppConfig" class="mt-6 w-full bg-slate-800 text-white py-3 rounded-xl font-bold">保存配置</button>
             </div>
         </div>
     </transition>
@@ -418,8 +418,6 @@
 
 <script>
     const { createApp } = Vue;
-    // API 基础路径 (Vercel 会自动路由 /api/xxx)
-    const API_BASE = '/api';
 
     createApp({
         data() {
@@ -436,8 +434,7 @@
                 showSuppManage: false,
                 showSuppHistory: false,
                 supplementsConfig: [],
-                // 今日打卡状态依然保存在本地，为了极致的响应速度
-                dailyRecords: JSON.parse(localStorage.getItem('v2.2_daily')) || {},
+                dailyRecords: {},
 
                 // Meds
                 newMed: { name: '', reason: '' },
@@ -461,197 +458,154 @@
             filteredMedHistory() {
                 if (!this.medSearch) return this.medHistory;
                 const q = this.medSearch.toLowerCase();
-                return this.medHistory.filter(l => l.name.toLowerCase().includes(q) || (l.reason && l.reason.toLowerCase().includes(q)));
+                return this.medHistory.filter(l => l.name.toLowerCase().includes(q) || l.reason.toLowerCase().includes(q));
             },
             // Plans Logic
-            pendingPlans() { return this.healthPlans.filter(p => p.status !== 'Done').sort((a,b) => a.date.localeCompare(b.date)); },
+            pendingPlans() { return this.healthPlans.filter(p => p.status !== 'done').sort((a,b) => a.dueDate.localeCompare(b.dueDate)); },
             filteredDonePlans() { 
-                let list = this.healthPlans.filter(p => p.status === 'Done');
+                let list = this.healthPlans.filter(p => p.status === 'done');
                 if (this.planSearch) {
                     const q = this.planSearch.toLowerCase();
-                    list = list.filter(p => p.name.toLowerCase().includes(q) || (p.result && p.result.toLowerCase().includes(q)));
+                    list = list.filter(p => p.name.toLowerCase().includes(q) || (p.resultSummary && p.resultSummary.toLowerCase().includes(q)));
                 }
-                // 按日期倒序
-                return list.sort((a,b) => b.date.localeCompare(a.date)); 
+                return list.sort((a,b) => b.doneDate.localeCompare(a.doneDate)); 
             }
         },
         mounted() { this.initData(); },
         methods: {
-            async initData() {
-                // 1. 加载本地缓存以快速显示
-                const cachedSupps = localStorage.getItem('v2.2_supps');
-                if (cachedSupps) this.supplementsConfig = JSON.parse(cachedSupps);
-                
+            initData() {
+                // Mock Data Initialization
+                this.supplementsConfig = JSON.parse(localStorage.getItem('v2.2_supps')) || [{ id: 1, name: '维生素C', dosage: '500mg', time: '早' }];
                 const today = new Date().toDateString();
-                if(localStorage.getItem('v2.2_date') !== today) { 
-                    this.dailyRecords = {}; 
-                    localStorage.setItem('v2.2_date', today); 
-                }
-
-                // 2. 从云端同步数据
-                await Promise.all([
-                    this.fetchSupplements(),
-                    this.fetchMeds(),
-                    this.fetchPlans()
-                ]);
+                if(localStorage.getItem('v2.2_date') !== today) { this.dailyRecords = {}; localStorage.setItem('v2.2_date', today); } 
+                else { this.dailyRecords = JSON.parse(localStorage.getItem('v2.2_daily')) || {}; }
+                this.medHistory = JSON.parse(localStorage.getItem('v2.2_meds')) || [];
+                this.healthPlans = JSON.parse(localStorage.getItem('v2.2_plans')) || [
+                    { id: 1, name: '入职体检', type: 'annual', dueDate: '2025-01-10', status: 'pending' },
+                    { id: 2, name: '牙齿洗牙', type: 'dental', dueDate: '2024-06-15', doneDate: '2024-06-15', status: 'done', resultSummary: '牙石较多，建议半年一次' }
+                ];
+            },
+            saveAll() {
+                localStorage.setItem('v2.2_supps', JSON.stringify(this.supplementsConfig));
+                localStorage.setItem('v2.2_daily', JSON.stringify(this.dailyRecords));
+                localStorage.setItem('v2.2_meds', JSON.stringify(this.medHistory));
+                localStorage.setItem('v2.2_plans', JSON.stringify(this.healthPlans));
             },
             getTabName(id) { return this.tabs.find(t=>t.id===id)?.label; },
             
-            // ====================== API Calls ======================
+            // Logic Methods
+            toggleSupplement(id) { this.dailyRecords[id] = !this.dailyRecords[id]; this.saveAll(); },
+            resetDaily() { this.dailyRecords = {}; this.saveAll(); },
+            addSupplementConfig() { this.supplementsConfig.push({ id: Date.now(), name: '', dosage: '', time: '早' }); },
+            deleteSupplement(idx) { this.supplementsConfig.splice(idx,1); },
+            saveSuppConfig() { this.supplementsConfig = this.supplementsConfig.filter(s=>s.name.trim()); this.showSuppManage=false; this.saveAll(); },
             
-            async fetchSupplements() {
-                try {
-                    const res = await fetch(`${API_BASE}/supplements`);
-                    if(res.ok) {
-                        const data = await res.json();
-                        this.supplementsConfig = data;
-                        localStorage.setItem('v2.2_supps', JSON.stringify(data));
-                    }
-                } catch(e) { console.error("Sync Supps Failed", e); }
+            addMedRecord() {
+                this.medHistory.unshift({ id: Date.now(), name: this.newMed.name, reason: this.newMed.reason, timestamp: Date.now() });
+                this.newMed = {name:'', reason:''}; this.saveAll();
             },
+            formatDate(ts) { return new Date(ts).toLocaleDateString('zh-CN', {month:'short',day:'numeric'}); },
+            formatTime(ts) { return new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}); },
 
-            async fetchMeds() {
-                try {
-                    const res = await fetch(`${API_BASE}/logs?category=💊 临时用药`);
-                    if(res.ok) {
-                        const data = await res.json();
-                        // 映射 API 字段 result -> reason
-                        this.medHistory = data.map(item => ({...item, reason: item.result})); 
-                    }
-                } catch(e) { console.error("Sync Meds Failed", e); }
-            },
-
-            async fetchPlans() {
-                try {
-                    const res = await fetch(`${API_BASE}/logs?category=🩺 定期检查`);
-                    if(res.ok) {
-                        this.healthPlans = await res.json();
-                    }
-                } catch(e) { console.error("Sync Plans Failed", e); }
-            },
-
-            // ====================== Logic Methods ======================
-
-            toggleSupplement(id) { 
-                this.dailyRecords[id] = !this.dailyRecords[id]; 
-                localStorage.setItem('v2.2_daily', JSON.stringify(this.dailyRecords));
-                // 可选：这里可以发送一个 POST /api/logs 记录打卡历史，为了 MVP 保持轻量暂不实现
-            },
-            resetDaily() { 
-                this.dailyRecords = {}; 
-                localStorage.setItem('v2.2_daily', JSON.stringify(this.dailyRecords));
-            },
-            
-            // Supp Config Sync
-            addSupplementConfig() { 
-                this.supplementsConfig.push({ name: '', dosage: '', time: '早晨' }); // 临时占位
-            },
-            async saveSuppConfig() {
-                const newItems = this.supplementsConfig.filter(s => !s.id);
-                // 简单的并行上传
-                for (const item of newItems) {
-                    if(!item.name) continue;
-                    await fetch(`${API_BASE}/supplements`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ action: 'create', ...item })
-                    });
-                }
-                this.showSuppManage = false;
-                this.fetchSupplements(); // 刷新获取 ID
-            },
-            async deleteSupplement(idx) { 
-                const item = this.supplementsConfig[idx];
-                if(item.id) {
-                    if(!confirm('确定从云端删除吗？')) return;
-                    await fetch(`${API_BASE}/supplements`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ action: 'delete', id: item.id })
-                    });
-                }
-                this.supplementsConfig.splice(idx,1);
-            },
-            
-            // Meds Sync
-            async addMedRecord() {
-                const payload = {
-                    name: this.newMed.name,
-                    result: this.newMed.reason, // 借用 result 字段存原因
-                    date: new Date().toISOString(),
-                    category: '💊 临时用药'
-                };
-                
-                // 乐观更新
-                this.medHistory.unshift({ id: 'temp-' + Date.now(), ...payload, reason: payload.result });
-                this.newMed = {name:'', reason:''};
-
-                // 后台发送
-                await fetch(`${API_BASE}/logs`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                this.fetchMeds(); // 刷新获取真实 ID
-            },
-            formatDate(ts) { if(!ts) return ''; return new Date(ts).toLocaleDateString('zh-CN', {month:'short',day:'numeric'}); },
-            formatTime(ts) { if(!ts) return ''; return new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}); },
-
-            // Plans Sync
+            // Plan Methods
             getPlanColor(type) {
                 const map = {
-                    'Annual': { bar: 'bg-blue-500', tag: 'bg-blue-100 text-blue-600', dot: 'border-blue-500' },
-                    'Quarterly': { bar: 'bg-teal-400', tag: 'bg-teal-100 text-teal-600', dot: 'border-teal-400' },
-                    'Dental': { bar: 'bg-purple-400', tag: 'bg-purple-100 text-purple-600', dot: 'border-purple-400' }
+                    annual: { bar: 'bg-blue-500', tag: 'bg-blue-100 text-blue-600', dot: 'border-blue-500' },
+                    quarterly: { bar: 'bg-teal-400', tag: 'bg-teal-100 text-teal-600', dot: 'border-teal-400' },
+                    dental: { bar: 'bg-purple-400', tag: 'bg-purple-100 text-purple-600', dot: 'border-purple-400' }
                 };
                 return map[type] || { bar: 'bg-slate-400', tag: 'bg-slate-100 text-slate-500', dot: 'border-slate-400' };
             },
             openPlanEdit(plan) {
                 this.editingPlan = plan || {};
-                this.editingPlanTemp = plan ? JSON.parse(JSON.stringify(plan)) : { id: null, name: '', type: 'Annual', date: new Date().toISOString().split('T')[0], status: 'Pending' };
+                this.editingPlanTemp = plan ? JSON.parse(JSON.stringify(plan)) : { id: null, name: '', type: 'annual', dueDate: new Date().toISOString().split('T')[0], status: 'pending' };
             },
             closePlanEdit() { this.editingPlan = null; },
-            
-            async deletePlan() {
-                if(!confirm('目前 API 仅支持归档，确认操作？')) return; 
-                // 实际项目中应实现 DELETE 接口，这里略过
-                this.closePlanEdit();
+            deletePlan() {
+                if(confirm('删除此计划?')) {
+                    this.healthPlans = this.healthPlans.filter(p => p.id !== this.editingPlan.id);
+                    this.saveAll();
+                    this.closePlanEdit();
+                }
             },
-            
-            async savePlan(markDone) {
+            savePlan(markDone) {
                 if(!this.editingPlanTemp.name) return;
                 
                 if(markDone) {
-                    this.editingPlanTemp.status = 'Done';
+                    this.editingPlanTemp.status = 'done';
+                    this.editingPlanTemp.doneDate = new Date().toISOString().split('T')[0];
                 }
 
-                // 乐观更新 UI
-                if(!this.editingPlanTemp.id) {
-                     this.healthPlans.push(this.editingPlanTemp);
-                } else {
+                if(this.editingPlanTemp.id) {
                     const idx = this.healthPlans.findIndex(p => p.id === this.editingPlanTemp.id);
                     if(idx!==-1) this.healthPlans[idx] = this.editingPlanTemp;
+                } else {
+                    this.editingPlanTemp.id = Date.now();
+                    this.healthPlans.push(this.editingPlanTemp);
                 }
 
-                // 发送请求
-                await fetch(`${API_BASE}/logs`, {
+                // Recurrence logic simulation
+                if(markDone) {
+                    const next = new Date(this.editingPlanTemp.dueDate);
+                    if(this.editingPlanTemp.type === 'annual') next.setFullYear(next.getFullYear()+1);
+                    else next.setMonth(next.getMonth()+3);
+                    
+                    if(confirm(`已归档! 是否自动创建下一次计划 (${next.toLocaleDateString()})?`)) {
+                        this.healthPlans.push({
+                            id: Date.now()+1,
+                            name: this.editingPlanTemp.name,
+                            type: this.editingPlanTemp.type,
+                            dueDate: next.toISOString().split('T')[0],
+                            status: 'pending'
+                        });
+                    }
+                }
+                this.saveAll();
+                this.closePlanEdit();
+            }
+            // ☁️ 从云端同步配置
+            async function fetchSupplements() {
+                try {
+                    // 替换为你的 Vercel 域名，本地测试用 /api/supplements
+                    const res = await fetch('/api/supplements');
+                    const data = await res.json();
+
+                    // 更新本地数据
+                    this.supplementsConfig = data;
+
+                    // 缓存一份到 localStorage 以防断网
+                    localStorage.setItem('v2.2_supps', JSON.stringify(data));
+                } catch (e) {
+                    console.error("同步失败，使用本地缓存", e);
+                }
+            },
+
+            // ☁️ 上传新配置
+            async function syncAddSupp(item) {
+                await fetch('/api/supplements', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        category: '🩺 定期检查',
-                        name: this.editingPlanTemp.name,
-                        date: this.editingPlanTemp.date,
-                        status: this.editingPlanTemp.status,
-                        type: this.editingPlanTemp.type,
-                        result: this.editingPlanTemp.result
+                        action: 'create',
+                        name: item.name,
+                        dosage: item.dosage,
+                        time: item.time
                     })
                 });
-
-                this.closePlanEdit();
-                this.fetchPlans(); // 刷新
+                this.fetchSupplements(); // 重新拉取以获取正确的 ID
             },
-            
-            handleFileUpload() { alert('Vercel Blob 存储需额外配置，暂未开启'); }
+
+            // ☁️ 删除配置
+            async function syncDeleteSupp(id) {
+                await fetch('/api/supplements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        id: id
+                    })
+                });
+            }
         }
     }).mount('#app');
 </script>
