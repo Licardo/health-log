@@ -1,77 +1,95 @@
 import { Client } from '@notionhq/client';
 
 export default async function handler(req, res) {
-  // CORS 设置
+  // CORS 和 基础设置
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // 从环境变量读取 Key，并去除可能存在的空格
+  const apiKey = process.env.NOTION_KEY ? process.env.NOTION_KEY.trim() : '';
+  const dbId = process.env.NOTION_LOGS_DB_ID ? process.env.NOTION_LOGS_DB_ID.trim() : '';
+  
+  const notion = new Client({ auth: apiKey });
+
   try {
-    // 🔍【关键修改】从环境变量读取并去除空格
-    const apiKey = process.env.NOTION_KEY ? process.env.NOTION_KEY.trim() : '';
-    const dbId = process.env.NOTION_LOGS_DB_ID ? process.env.NOTION_LOGS_DB_ID.trim() : '';
+    // === GET: 获取日志 ===
+    if (req.method === 'GET') {
+      const { category, date, limit } = req.query;
+      
+      const filter = { and: [] };
+      if (category) filter.and.push({ property: 'Category', select: { equals: category } });
+      if (date) filter.and.push({ property: 'Date', date: { equals: date } });
 
-    // 🔍【调试日志】在 Vercel Logs 中查看（只显示前10位，保护安全）
-    console.log(`[Logs API] Key Prefix: ${apiKey.substring(0, 10)}...`);
-    console.log(`[Logs API] DB ID: ${dbId}`);
+      const response = await notion.databases.query({
+        database_id: dbId,
+        filter: filter.and.length > 0 ? filter : undefined,
+        sorts: [{ property: 'Date', direction: 'descending' }],
+        // 如果传了 limit (如日历热力图)，则使用 limit，否则默认 50 条
+        page_size: limit ? parseInt(limit) : 50 
+      });
+      
+      const data = response.results.map(page => ({
+        id: page.id,
+        name: page.properties.Name?.title[0]?.plain_text || '',
+        date: page.properties.Date?.date?.start,
+        status: page.properties.Status?.select?.name,
+        type: page.properties.Type?.select?.name,
+        // 兼容处理 Result 字段 (Rich Text)
+        result: page.properties.Result?.rich_text[0]?.plain_text || ''
+      }));
+      
+      return res.status(200).json(data);
+    }
 
-    // 初始化客户端
-    const notion = new Client({ auth: apiKey });
-
-    // === POST: 新增日志 ===
+    // === POST: 新增 ===
     if (req.method === 'POST') {
       const { name, date, category, status, type, result } = req.body;
-
-      // 构建属性
+      
       const properties = {
         'Name': { title: [{ text: { content: name || '未命名' } }] },
-        'Date': { date: { start: date || new Date().toISOString() } },
+        'Date': { date: { start: date || new Date().toISOString().split('T')[0] } },
         'Category': { select: { name: category } }
       };
 
       if (status) properties['Status'] = { select: { name: status } };
       if (type) properties['Type'] = { select: { name: type } };
-      // 兼容 reason 和 result 字段
       if (result) properties['Result'] = { rich_text: [{ text: { content: result } }] };
 
       const response = await notion.pages.create({
         parent: { database_id: dbId },
         properties: properties
       });
-
+      
       return res.status(200).json({ success: true, id: response.id });
     }
 
-    // === GET: 获取历史 ===
-    if (req.method === 'GET') {
-      const { category } = req.query;
-      const response = await notion.databases.query({
-        database_id: dbId,
-        filter: category ? {
-          property: 'Category',
-          select: { equals: category }
-        } : undefined,
-        sorts: [{ property: 'Date', direction: 'descending' }],
-        page_size: 20
-      });
+    // === PUT: 修改 ===
+    if (req.method === 'PUT') {
+      const { id, name, date, status, type, result } = req.body;
+      const properties = {};
+      
+      if (name) properties['Name'] = { title: [{ text: { content: name } }] };
+      if (date) properties['Date'] = { date: { start: date } };
+      if (status) properties['Status'] = { select: { name: status } };
+      if (type) properties['Type'] = { select: { name: type } };
+      if (result) properties['Result'] = { rich_text: [{ text: { content: result } }] };
 
-      // 数据清洗
-      const data = response.results.map(page => ({
-        id: page.id,
-        name: page.properties.Name?.title[0]?.plain_text || '无标题',
-        date: page.properties.Date?.date?.start,
-        status: page.properties.Status?.select?.name,
-        result: page.properties.Result?.rich_text[0]?.plain_text || ''
-      }));
+      await notion.pages.update({ page_id: id, properties });
+      return res.status(200).json({ success: true });
+    }
 
-      return res.status(200).json(data);
+    // === DELETE: 归档 (软删除) ===
+    if (req.method === 'DELETE') {
+      const { id } = req.body;
+      await notion.pages.update({ page_id: id, archived: true });
+      return res.status(200).json({ success: true });
     }
 
   } catch (error) {
     console.error('[Logs API Error]:', error.body || error);
-    // 返回详细的 Notion 错误信息
-    return res.status(500).json({ error: error.message, code: error.code });
+    return res.status(500).json({ error: error.message });
   }
 }
